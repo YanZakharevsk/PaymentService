@@ -52,7 +52,7 @@ public class PaymentServiceImpl implements PaymentService {
          Payment savedPayment = paymentDao.save(payment);
          PaymentResponse response = mapper.toResponse(savedPayment);
 
-         applicationEventPublisher.publishEvent(new PaymentCreatedEvent(response));
+         //applicationEventPublisher.publishEvent(new PaymentCreatedEvent(response));
 
          return response;
     }
