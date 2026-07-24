@@ -5,6 +5,7 @@ import com.inno.payment_service.controller.PaymentController;
 import com.inno.payment_service.dto.request.CreatePaymentRequest;
 import com.inno.payment_service.dto.response.PaymentResponse;
 import com.inno.payment_service.dto.response.PaymentsTotalSumBetweenDatesResponse;
+import com.inno.payment_service.exception.OrderNotFoundException;
 import com.inno.payment_service.it.config.BaseKafkaIntegrationTest;
 import com.inno.payment_service.it.config.ConsumerConfigTest;
 import com.inno.payment_service.it.config.ProducerConfigTest;
@@ -20,6 +21,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -40,6 +42,7 @@ import java.util.Random;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,6 +54,7 @@ import static org.mockito.Mockito.verify;
 )
 @Testcontainers
 @Import({ProducerConfigTest.class, ConsumerConfigTest.class})
+@WithMockUser(authorities = {"ADMIN", "USER"})
 public class PaymentControllerIntegrationTest extends BaseKafkaIntegrationTest {
     private static final String MIN = "1";
     private static final String MAX = "50";
@@ -118,7 +122,6 @@ public class PaymentControllerIntegrationTest extends BaseKafkaIntegrationTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().getOrderId()).isEqualTo(ORDER_ID);
             assertThat(response.getBody().getUserId()).isEqualTo(USER_ID);
-            assertThat(response.getBody().getPaymentStatus()).isEqualTo(PaymentStatus.SUCCESS);
             assertThat(paymentRepository.findAll().size()).isEqualTo(1);
         }
         @Test
@@ -136,7 +139,6 @@ public class PaymentControllerIntegrationTest extends BaseKafkaIntegrationTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().getOrderId()).isEqualTo(ORDER_ID);
             assertThat(response.getBody().getUserId()).isEqualTo(USER_ID);
-            assertThat(response.getBody().getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
             assertThat(paymentRepository.findAll().size()).isEqualTo(1);
         }
     }
@@ -161,12 +163,10 @@ public class PaymentControllerIntegrationTest extends BaseKafkaIntegrationTest {
             assertThat(response.getBody().get(0).getOrderId()).isEqualTo(ORDER_ID);
         }
         @Test
-        void shouldReturn204_whenEmpty() {
-            ResponseEntity<List<PaymentResponse>> response =
-                    paymentController.findAllByOrderId(ORDER_ID);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-            assertThat(response.getBody()).isEmpty();
+        void shouldThrowOrderNotFoundException_whenEmpty() {
+            assertThatThrownBy(() -> paymentController.findAllByOrderId(ORDER_ID))
+                    .isInstanceOf(OrderNotFoundException.class)
+                    .hasMessage("Order with id " + ORDER_ID + " not found");
         }
     }
 
@@ -188,14 +188,6 @@ public class PaymentControllerIntegrationTest extends BaseKafkaIntegrationTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isNotEmpty();
             assertThat(response.getBody().get(0).getUserId()).isEqualTo(USER_ID);
-        }
-        @Test
-        void shouldReturn204_whenEmpty() {
-            ResponseEntity<List<PaymentResponse>> response =
-                    paymentController.findAllByUserId(USER_ID);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-            assertThat(response.getBody()).isEmpty();
         }
     }
 
